@@ -5,16 +5,16 @@ import joblib
 from pathlib import Path
 import json
 
-# --- 1. 页面配置与文本库 ---
+
 
 st.set_page_config(page_title="Cognitive Risk Predictor", layout="wide", initial_sidebar_state="expanded")
 
-# [UI优化] 创建一个集中的文本库，用于中英双语切换
+
 TEXTS = {
     "page_title": {"中文": "认知障碍风险预测工具", "English": "Cognitive Impairment Risk Prediction Tool"},
     "main_title": {"中文": "🧠 认知障碍 (MCI/AD) 风险预测工具", "English": "🧠 Cognitive Impairment (MCI/AD) Risk Prediction Tool"},
     
-    # Sidebar
+   
     "settings_header": {"中文": "⚙️ 设置", "English": "Settings"},
     "language_label": {"中文": "语言 / Language", "English": "Language / 語言"},
     "model_loaded": {"中文": "已加载模型", "English": "Loaded Model"},
@@ -24,7 +24,7 @@ TEXTS = {
         "English": "This tool utilizes a calibrated machine learning model based on published research to predict the risk of future cognitive impairment (MCI/AD) based on your personal information, clinical markers, and lifestyle. All results are for reference only and cannot replace a professional medical diagnosis."
     },
 
-    # Input Sections
+  
     "personal_info_header": {"中文": "👤 个人基本信息", "English": "Personal Information"},
     "age": {"中文": "年龄 (Age)", "English": "Age"},
     "gender": {"中文": "性别 (Gender)", "English": "Gender"},
@@ -46,18 +46,18 @@ TEXTS = {
     "dementia_history": {"中文": "痴呆家族史", "English": "Family History of Dementia"},
     "depression_history": {"中文": "抑郁症家族史", "English": "Family History of Depression"},
 
-    # Options
+
     "option_yes": {"中文": "是", "English": "Yes"},
     "option_no": {"中文": "否", "English": "No"},
     "gender_female": {"中文": "女性", "English": "Female"},
     "gender_male": {"中文": "男性", "English": "Male"},
 
-    # Prediction
+ 
     "button_predict": {"中文": "📈 点击进行风险预测", "English": "📈 Predict Risk"},
     "predict_success": {"中文": "✅ 预测完成！", "English": "✅ Prediction Complete!"},
     "predict_header": {"中文": "认知障碍（MCI/AD）风险概率", "English": "Cognitive Impairment (MCI/AD) Risk Probability"},
     
-    # Advice
+
     "advice_header": {"中文": "📋 认知健康建议", "English": "Cognitive Health Advice"},
     "risk_label_vh": {"中文": "风险评估：非常高", "English": "Risk Assessment: Very High"},
     "advice_vh": {
@@ -80,18 +80,18 @@ TEXTS = {
         "English": "**Core Advice**: Your current risk is low, which is a very positive sign.\n\n**Lifestyle**: Please continue to maintain your healthy habits, including a balanced diet, regular exercise, adequate sleep, and an active social life, to preserve your brain health long-term."
     },
 
-    # Disclaimer
+
     "disclaimer": {
         "中文": "**免责声明**: 本工具的预测结果仅供参考，不能替代专业的医疗诊断。所有健康相关的决策，请务必咨询您的医生。",
-        "English": "**Disclaimer**: The prediction results of this tool are for reference only and cannot replace professional medical diagnosis. For all health-related decisions, please be sure to consult your doctor."
+        "English": "**Disclaimer**: The prediction results of this tool are for reference only and cannot replace a professional medical diagnosis. For all health-related decisions, please be sure to consult your doctor."
     }
 }
 
-# --- 会话状态初始化 ---
+
 if 'lang' not in st.session_state:
     st.session_state.lang = "中文"
 
-# --- 2. 加载模型 ---
+
 MODEL_DIR = Path("./machine_learning_results_MCI_AD")
 @st.cache_resource
 def load_model():
@@ -108,23 +108,22 @@ def load_model():
         scaler = joblib.load(MODEL_DIR / 'scaler.joblib')
         model_columns = joblib.load(MODEL_DIR / 'model_columns.joblib')
         continuous_cols = ['edu', 'ABO', 'age', 'BMI']
-        imputer_columns = ['edu', 'ABO', 'dia', 'APOE4_carrier', 'age', 'gender', 'BMI', 'smoke', 'alcohol', 'dementia_family_history', 'depression_family_history', 'hypertension', 'diabetes', 'hyperlipidemia']
         
         st.sidebar.info(f"{TEXTS['model_loaded'][st.session_state.lang]}: **{best_model_name}**")
         
         TEXTS["about_text"]["中文"] = TEXTS["about_text"]["中文"].replace("机器学习", best_model_name)
         TEXTS["about_text"]["English"] = TEXTS["about_text"]["English"].replace("machine learning", best_model_name)
 
-        return model, imputer, scaler, model_columns, continuous_cols, imputer_columns
+        return model, imputer, scaler, model_columns, continuous_cols
         
     except FileNotFoundError as e:
         st.error(f"Error: Loading model files failed. Please ensure all required .joblib and .json files are in the '{MODEL_DIR}' folder.")
         st.error(f"Specific error: {e}")
-        return None, None, None, None, None, None
+        return None, None, None, None, None
 
-model, imputer, scaler, model_columns, continuous_cols, imputer_columns = load_model()
+model, imputer, scaler, model_columns, continuous_cols = load_model()
 
-# --- 3. 侧边栏 ---
+
 with st.sidebar:
     st.title(TEXTS["settings_header"][st.session_state.lang])
     
@@ -141,7 +140,7 @@ with st.sidebar:
     with st.expander(TEXTS["about_header"][st.session_state.lang]):
         st.write(TEXTS["about_text"][st.session_state.lang])
 
-# --- 4. 主页面 ---
+
 st.title(TEXTS["main_title"][st.session_state.lang])
 st.markdown("---")
 
@@ -177,31 +176,30 @@ if model:
     
     st.markdown("---")
 
-    # --- 5. 预测逻辑 ---
+
     if st.button(TEXTS["button_predict"][st.session_state.lang], use_container_width=True, type="primary"):
-        # [代码修正] 恢复完整的预测逻辑
         input_data = {'edu': edu, 'ABO': abo, 'APOE4_carrier': apoe4_carrier, 'age': age, 'gender': gender, 'BMI': bmi, 'smoke': smoke, 'alcohol': alcohol, 'dementia_family_history': dementia_family_history, 'depression_family_history': depression_family_history, 'hypertension': hypertension, 'diabetes': diabetes, 'hyperlipidemia': hyperlipidemia}
+        
+    
         input_df_features = pd.DataFrame([input_data])
+        input_df_features = input_df_features[model_columns]
         
-        # 预处理流程
-        input_for_imputer = pd.DataFrame(columns=imputer_columns)._append(input_df_features, ignore_index=True)
-        input_imputed_values = imputer.transform(input_for_imputer)
-        input_imputed_df = pd.DataFrame(input_imputed_values, columns=imputer_columns)
-        input_features_processed = input_imputed_df.drop('dia', axis=1)
-        input_features_processed = input_features_processed[model_columns]
-        input_scaled_df = input_features_processed.copy()
-        input_scaled_df[continuous_cols] = scaler.transform(input_features_processed[continuous_cols])
+ 
+        input_imputed_values = imputer.transform(input_df_features)
+        input_imputed_df = pd.DataFrame(input_imputed_values, columns=model_columns)
         
-        # 进行预测
+      
+        input_scaled_df = input_imputed_df.copy()
+        input_scaled_df[continuous_cols] = scaler.transform(input_imputed_df[continuous_cols])
+        
+
         prediction_proba = model.predict_proba(input_scaled_df)[:, 1]
         risk_percentage = prediction_proba[0] * 100
         
-        # 显示结果
         st.success(f"**{TEXTS['predict_success'][st.session_state.lang]}**")
         st.metric(label=TEXTS['predict_header'][st.session_state.lang], value=f"{risk_percentage:.2f} %")
         st.progress(int(risk_percentage))
 
-        # 显示建议
         with st.expander(TEXTS["advice_header"][st.session_state.lang], expanded=True):
             if risk_percentage > 75:
                 st.error(f"**{TEXTS['risk_label_vh'][st.session_state.lang]}**")
