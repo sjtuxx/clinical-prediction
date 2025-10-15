@@ -163,7 +163,6 @@ if model:
             apoe4_carrier = st.radio(TEXTS["apoe4"][st.session_state.lang], [0, 1], format_func=lambda x: TEXTS["option_no"][st.session_state.lang] if x == 0 else TEXTS["option_yes"][st.session_state.lang], horizontal=True)
             
     with col3:
-       
         with st.container(border=True):
             st.header(TEXTS["lifestyle_header"][st.session_state.lang])
             st.subheader(TEXTS["lifestyle_subheader"][st.session_state.lang])
@@ -180,11 +179,42 @@ if model:
 
     # --- 5. 预测逻辑 ---
     if st.button(TEXTS["button_predict"][st.session_state.lang], use_container_width=True, type="primary"):
+        # [代码修正] 恢复完整的预测逻辑
         input_data = {'edu': edu, 'ABO': abo, 'APOE4_carrier': apoe4_carrier, 'age': age, 'gender': gender, 'BMI': bmi, 'smoke': smoke, 'alcohol': alcohol, 'dementia_family_history': dementia_family_history, 'depression_family_history': depression_family_history, 'hypertension': hypertension, 'diabetes': diabetes, 'hyperlipidemia': hyperlipidemia}
         input_df_features = pd.DataFrame([input_data])
         
         # 预处理流程
-        # ...
+        input_for_imputer = pd.DataFrame(columns=imputer_columns)._append(input_df_features, ignore_index=True)
+        input_imputed_values = imputer.transform(input_for_imputer)
+        input_imputed_df = pd.DataFrame(input_imputed_values, columns=imputer_columns)
+        input_features_processed = input_imputed_df.drop('dia', axis=1)
+        input_features_processed = input_features_processed[model_columns]
+        input_scaled_df = input_features_processed.copy()
+        input_scaled_df[continuous_cols] = scaler.transform(input_features_processed[continuous_cols])
+        
+        # 进行预测
+        prediction_proba = model.predict_proba(input_scaled_df)[:, 1]
+        risk_percentage = prediction_proba[0] * 100
+        
+        # 显示结果
+        st.success(f"**{TEXTS['predict_success'][st.session_state.lang]}**")
+        st.metric(label=TEXTS['predict_header'][st.session_state.lang], value=f"{risk_percentage:.2f} %")
+        st.progress(int(risk_percentage))
+
+        # 显示建议
+        with st.expander(TEXTS["advice_header"][st.session_state.lang], expanded=True):
+            if risk_percentage > 75:
+                st.error(f"**{TEXTS['risk_label_vh'][st.session_state.lang]}**")
+                st.write(TEXTS["advice_vh"][st.session_state.lang])
+            elif risk_percentage > 50:
+                st.warning(f"**{TEXTS['risk_label_h'][st.session_state.lang]}**")
+                st.write(TEXTS["advice_h"][st.session_state.lang])
+            elif risk_percentage > 25:
+                st.info(f"**{TEXTS['risk_label_m'][st.session_state.lang]}**")
+                st.write(TEXTS["advice_m"][st.session_state.lang])
+            else:
+                st.success(f"**{TEXTS['risk_label_l'][st.session_state.lang]}**")
+                st.write(TEXTS["advice_l"][st.session_state.lang])
 
     st.caption(TEXTS["disclaimer"][st.session_state.lang])
 
