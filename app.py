@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 from pathlib import Path
-import json # 导入json库
+import json
 
 # --- 1. 页面配置与文本库 ---
 
@@ -20,7 +20,7 @@ TEXTS = {
     "model_loaded": {"中文": "已加载模型", "English": "Loaded Model"},
     "about_header": {"中文": "ℹ️ 关于此工具", "English": "About This Tool"},
     "about_text": {
-        "中文": "本工具基于已发表的研究成果，使用经过校准的机器学习模型，根据您的个人信息、临床指标和生活方式来预测未来患认知障碍（MCI/AD）的风险。所有结果仅供参考，不能替代专业医疗诊断。",
+        "中文": "本工具基于校准的机器学习模型，根据您的个人信息、临床指标和生活方式来预测未来患认知障碍（MCI/AD）的风险。所有结果仅供参考，不能替代专业医疗诊断。",
         "English": "This tool utilizes a calibrated machine learning model based on published research to predict the risk of future cognitive impairment (MCI/AD) based on your personal information, clinical markers, and lifestyle. All results are for reference only and cannot replace a professional medical diagnosis."
     },
 
@@ -32,10 +32,10 @@ TEXTS = {
     "bmi": {"中文": "身体质量指数 (BMI)", "English": "Body Mass Index (BMI)"},
     
     "biomarkers_header": {"中文": "🩸 核心生物标志物", "English": "Core Biomarkers"},
-    "abo": {"中文": "血清标志物 ABO (标准化前)", "English": "Serum Marker ABO (pre-standardization)"},
+    "abo": {"中文": "血清标志物Aβ寡聚体 (pg/ml)", "English": "Serum Marker Aβ oligmers (pg/ml)"},
     "apoe4": {"中文": "APOE4 携带者", "English": "APOE4 Carrier"},
 
-    "lifestyle_header": {"中文": "❤️ 生活方式与病史", "English": "Lifestyle & Medical History"},
+    "lifestyle_header": {"中文": "🏃‍ 生活方式与病史", "English": "Lifestyle & Medical History"},
     "lifestyle_subheader": {"中文": "生活方式 (Lifestyle)", "English": "Lifestyle"},
     "smoke": {"中文": "当前是否吸烟", "English": "Currently Smoking"},
     "alcohol": {"中文": "当前是否饮酒", "English": "Currently Drinking Alcohol"},
@@ -83,7 +83,7 @@ TEXTS = {
     # Disclaimer
     "disclaimer": {
         "中文": "**免责声明**: 本工具的预测结果仅供参考，不能替代专业的医疗诊断。所有健康相关的决策，请务必咨询您的医生。",
-        "English": "**Disclaimer**: The prediction results of this tool are for reference only and cannot replace a professional medical diagnosis. For all health-related decisions, please be sure to consult your doctor."
+        "English": "**Disclaimer**: The prediction results of this tool are for reference only and cannot replace professional medical diagnosis. For all health-related decisions, please be sure to consult your doctor."
     }
 }
 
@@ -97,36 +97,32 @@ MODEL_DIR = Path("./machine_learning_results_MCI_AD")
 def load_model():
     """动态加载最佳模型及所有预处理器"""
     try:
-        # 1. 读取记录最佳模型名称的文件
         with open(MODEL_DIR / 'best_model_info.json', 'r') as f:
             best_model_info = json.load(f)
         best_model_name = best_model_info['best_model_name']
         
-        # 2. 根据名称构建模型文件名并加载
         model_filename = f'final_calibrated_{best_model_name.lower()}_model.joblib'
         model = joblib.load(MODEL_DIR / model_filename)
         
-        # 加载其他文件
         imputer = joblib.load(MODEL_DIR / 'imputer.joblib')
         scaler = joblib.load(MODEL_DIR / 'scaler.joblib')
         model_columns = joblib.load(MODEL_DIR / 'model_columns.joblib')
         continuous_cols = ['edu', 'ABO', 'age', 'BMI']
+        imputer_columns = ['edu', 'ABO', 'dia', 'APOE4_carrier', 'age', 'gender', 'BMI', 'smoke', 'alcohol', 'dementia_family_history', 'depression_family_history', 'hypertension', 'diabetes', 'hyperlipidemia']
         
-        # 在侧边栏显示加载的模型名称，方便调试和确认
         st.sidebar.info(f"{TEXTS['model_loaded'][st.session_state.lang]}: **{best_model_name}**")
         
-        # 动态更新“关于”文本中的模型名称
         TEXTS["about_text"]["中文"] = TEXTS["about_text"]["中文"].replace("机器学习", best_model_name)
         TEXTS["about_text"]["English"] = TEXTS["about_text"]["English"].replace("machine learning", best_model_name)
 
-        return model, imputer, scaler, model_columns, continuous_cols
+        return model, imputer, scaler, model_columns, continuous_cols, imputer_columns
         
     except FileNotFoundError as e:
         st.error(f"Error: Loading model files failed. Please ensure all required .joblib and .json files are in the '{MODEL_DIR}' folder.")
         st.error(f"Specific error: {e}")
-        return None, None, None, None, None
+        return None, None, None, None, None, None
 
-model, imputer, scaler, model_columns, continuous_cols = load_model()
+model, imputer, scaler, model_columns, continuous_cols, imputer_columns = load_model()
 
 # --- 3. 侧边栏 ---
 with st.sidebar:
@@ -155,18 +151,19 @@ if model:
     with col1:
         with st.container(border=True):
             st.header(TEXTS["personal_info_header"][st.session_state.lang])
-            age = st.number_input(TEXTS["age"][st.session_state.lang], 18, 120, 70, 1)
+            age = st.number_input(TEXTS["age"][st.session_state.lang], min_value=50, max_value=100, value=70, step=1)
             gender = st.radio(TEXTS["gender"][st.session_state.lang], [0, 1], format_func=lambda x: TEXTS["gender_female"][st.session_state.lang] if x == 0 else TEXTS["gender_male"][st.session_state.lang], horizontal=True)
-            edu = st.number_input(TEXTS["edu"][st.session_state.lang], 0, 40, 12, 1)
-            bmi = st.number_input(TEXTS["bmi"][st.session_state.lang], 15.0, 50.0, 24.0, 0.1, format="%.1f")
+            edu = st.number_input(TEXTS["edu"][st.session_state.lang], min_value=0, max_value=20, value=12, step=1)
+            bmi = st.number_input(TEXTS["bmi"][st.session_state.lang], min_value=15.0, max_value=50.0, value=24.0, step=0.1, format="%.1f")
 
     with col2:
         with st.container(border=True):
             st.header(TEXTS["biomarkers_header"][st.session_state.lang])
-            abo = st.number_input(TEXTS["abo"][st.session_state.lang], 0.0, 500.0, 100.0, 0.1, format="%.1f")
+            abo = st.number_input(TEXTS["abo"][st.session_state.lang], min_value=0.0, max_value=500.0, value=100.0, step=0.1, format="%.1f")
             apoe4_carrier = st.radio(TEXTS["apoe4"][st.session_state.lang], [0, 1], format_func=lambda x: TEXTS["option_no"][st.session_state.lang] if x == 0 else TEXTS["option_yes"][st.session_state.lang], horizontal=True)
             
     with col3:
+       
         with st.container(border=True):
             st.header(TEXTS["lifestyle_header"][st.session_state.lang])
             st.subheader(TEXTS["lifestyle_subheader"][st.session_state.lang])
@@ -184,41 +181,10 @@ if model:
     # --- 5. 预测逻辑 ---
     if st.button(TEXTS["button_predict"][st.session_state.lang], use_container_width=True, type="primary"):
         input_data = {'edu': edu, 'ABO': abo, 'APOE4_carrier': apoe4_carrier, 'age': age, 'gender': gender, 'BMI': bmi, 'smoke': smoke, 'alcohol': alcohol, 'dementia_family_history': dementia_family_history, 'depression_family_history': depression_family_history, 'hypertension': hypertension, 'diabetes': diabetes, 'hyperlipidemia': hyperlipidemia}
-        
-        # [核心修正] 确保送入imputer的数据不包含'dia'列
-        # 1. 创建一个与训练时特征完全一致的DataFrame
         input_df_features = pd.DataFrame([input_data])
-        input_df_features = input_df_features[model_columns]
         
-        # 2. 直接对这个不含'dia'列的DataFrame进行插补
-        input_imputed_values = imputer.transform(input_df_features)
-        input_imputed_df = pd.DataFrame(input_imputed_values, columns=model_columns)
-        
-        # 3. 对插补后的数据进行标准化
-        input_scaled_df = input_imputed_df.copy()
-        input_scaled_df[continuous_cols] = scaler.transform(input_imputed_df[continuous_cols])
-        
-        # 4. 进行预测
-        prediction_proba = model.predict_proba(input_scaled_df)[:, 1]
-        risk_percentage = prediction_proba[0] * 100
-        
-        st.success(f"**{TEXTS['predict_success'][st.session_state.lang]}**")
-        st.metric(label=TEXTS['predict_header'][st.session_state.lang], value=f"{risk_percentage:.2f} %")
-        st.progress(int(risk_percentage))
-
-        with st.expander(TEXTS["advice_header"][st.session_state.lang], expanded=True):
-            if risk_percentage > 75:
-                st.error(f"**{TEXTS['risk_label_vh'][st.session_state.lang]}**")
-                st.write(TEXTS["advice_vh"][st.session_state.lang])
-            elif risk_percentage > 50:
-                st.warning(f"**{TEXTS['risk_label_h'][st.session_state.lang]}**")
-                st.write(TEXTS["advice_h"][st.session_state.lang])
-            elif risk_percentage > 25:
-                st.info(f"**{TEXTS['risk_label_m'][st.session_state.lang]}**")
-                st.write(TEXTS["advice_m"][st.session_state.lang])
-            else:
-                st.success(f"**{TEXTS['risk_label_l'][st.session_state.lang]}**")
-                st.write(TEXTS["advice_l"][st.session_state.lang])
+        # 预处理流程
+        # ...
 
     st.caption(TEXTS["disclaimer"][st.session_state.lang])
 
