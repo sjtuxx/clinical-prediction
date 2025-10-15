@@ -83,7 +83,7 @@ TEXTS = {
     # Disclaimer
     "disclaimer": {
         "中文": "**免责声明**: 本工具的预测结果仅供参考，不能替代专业的医疗诊断。所有健康相关的决策，请务必咨询您的医生。",
-        "English": "**Disclaimer**: The prediction results of this tool are for reference only and cannot replace professional medical diagnosis. For all health-related decisions, please be sure to consult your doctor."
+        "English": "**Disclaimer**: The prediction results of this tool are for reference only and cannot replace a professional medical diagnosis. For all health-related decisions, please be sure to consult your doctor."
     }
 }
 
@@ -97,7 +97,6 @@ MODEL_DIR = Path("./machine_learning_results_MCI_AD")
 def load_model():
     """动态加载最佳模型及所有预处理器"""
     try:
-        # [核心修正] 动态加载最佳模型
         # 1. 读取记录最佳模型名称的文件
         with open(MODEL_DIR / 'best_model_info.json', 'r') as f:
             best_model_info = json.load(f)
@@ -112,23 +111,22 @@ def load_model():
         scaler = joblib.load(MODEL_DIR / 'scaler.joblib')
         model_columns = joblib.load(MODEL_DIR / 'model_columns.joblib')
         continuous_cols = ['edu', 'ABO', 'age', 'BMI']
-        imputer_columns = ['edu', 'ABO', 'dia', 'APOE4_carrier', 'age', 'gender', 'BMI', 'smoke', 'alcohol', 'dementia_family_history', 'depression_family_history', 'hypertension', 'diabetes', 'hyperlipidemia']
         
         # 在侧边栏显示加载的模型名称，方便调试和确认
         st.sidebar.info(f"{TEXTS['model_loaded'][st.session_state.lang]}: **{best_model_name}**")
         
         # 动态更新“关于”文本中的模型名称
-        TEXTS["about_text"]["中文"] = TEXTS["about_text"]["中文"].replace("XGBoost", best_model_name)
-        TEXTS["about_text"]["English"] = TEXTS["about_text"]["English"].replace("XGBoost", best_model_name)
+        TEXTS["about_text"]["中文"] = TEXTS["about_text"]["中文"].replace("机器学习", best_model_name)
+        TEXTS["about_text"]["English"] = TEXTS["about_text"]["English"].replace("machine learning", best_model_name)
 
-        return model, imputer, scaler, model_columns, continuous_cols, imputer_columns
+        return model, imputer, scaler, model_columns, continuous_cols
         
     except FileNotFoundError as e:
         st.error(f"Error: Loading model files failed. Please ensure all required .joblib and .json files are in the '{MODEL_DIR}' folder.")
         st.error(f"Specific error: {e}")
-        return None, None, None, None, None, None
+        return None, None, None, None, None
 
-model, imputer, scaler, model_columns, continuous_cols, imputer_columns = load_model()
+model, imputer, scaler, model_columns, continuous_cols = load_model()
 
 # --- 3. 侧边栏 ---
 with st.sidebar:
@@ -186,18 +184,21 @@ if model:
     # --- 5. 预测逻辑 ---
     if st.button(TEXTS["button_predict"][st.session_state.lang], use_container_width=True, type="primary"):
         input_data = {'edu': edu, 'ABO': abo, 'APOE4_carrier': apoe4_carrier, 'age': age, 'gender': gender, 'BMI': bmi, 'smoke': smoke, 'alcohol': alcohol, 'dementia_family_history': dementia_family_history, 'depression_family_history': depression_family_history, 'hypertension': hypertension, 'diabetes': diabetes, 'hyperlipidemia': hyperlipidemia}
+        
+        # [核心修正] 确保送入imputer的数据不包含'dia'列
+        # 1. 创建一个与训练时特征完全一致的DataFrame
         input_df_features = pd.DataFrame([input_data])
+        input_df_features = input_df_features[model_columns]
         
-        # 预处理流程 (与之前版本相同)
-        input_for_imputer = pd.DataFrame(columns=imputer_columns)._append(input_df_features, ignore_index=True)
-        input_imputed_values = imputer.transform(input_for_imputer)
-        input_imputed_df = pd.DataFrame(input_imputed_values, columns=imputer_columns)
-        input_features_processed = input_imputed_df.drop('dia', axis=1)
-        input_features_processed = input_features_processed[model_columns]
-        input_scaled_df = input_features_processed.copy()
-        input_scaled_df[continuous_cols] = scaler.transform(input_features_processed[continuous_cols])
+        # 2. 直接对这个不含'dia'列的DataFrame进行插补
+        input_imputed_values = imputer.transform(input_df_features)
+        input_imputed_df = pd.DataFrame(input_imputed_values, columns=model_columns)
         
-        # 进行预测
+        # 3. 对插补后的数据进行标准化
+        input_scaled_df = input_imputed_df.copy()
+        input_scaled_df[continuous_cols] = scaler.transform(input_imputed_df[continuous_cols])
+        
+        # 4. 进行预测
         prediction_proba = model.predict_proba(input_scaled_df)[:, 1]
         risk_percentage = prediction_proba[0] * 100
         
@@ -220,3 +221,4 @@ if model:
                 st.write(TEXTS["advice_l"][st.session_state.lang])
 
     st.caption(TEXTS["disclaimer"][st.session_state.lang])
+
